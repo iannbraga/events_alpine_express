@@ -1,10 +1,8 @@
 // Importações necessárias
 const express = require('express');
 const bodyParser = require('body-parser');
-const { v4: uuidv4 } = require('uuid');
+const { Sequelize, DataTypes } = require('sequelize');
 const cors = require('cors');
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
 
 // Inicialização do aplicativo
 const app = express();
@@ -14,109 +12,100 @@ const port = 3000;
 app.use(bodyParser.json());
 app.use(cors());
 
-// Inicialização do banco de dados
-const dbPath = path.resolve(__dirname, 'todos.db');
-const db = new sqlite3.Database(dbPath);
-
-// Criação da tabela de tarefas
-db.serialize(() => {
-    db.run(`
-        CREATE TABLE IF NOT EXISTS todos (
-            id TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
-            description TEXT,
-            completed INTEGER DEFAULT 0
-        )
-    `);
+// Configuração do Sequelize
+const sequelize = new Sequelize({
+    dialect: 'sqlite',
+    storage: 'todos.db'
 });
+
+// Definição do modelo ToDo
+const Todo = sequelize.define('Todo', {
+    id: {
+        type: DataTypes.UUID,
+        defaultValue: Sequelize.UUIDV4,
+        primaryKey: true
+    },
+    title: {
+        type: DataTypes.STRING,
+        allowNull: false
+    },
+    description: {
+        type: DataTypes.STRING,
+        defaultValue: ''
+    },
+    completed: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+    }
+});
+
+// Sincronização com o banco de dados
+sequelize.sync();
 
 // Rotas
 
 // Obter todas as tarefas
-app.get('/todos', (req, res) => {
-    db.all('SELECT * FROM todos', [], (err, rows) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        res.json(rows.map(row => ({
-            ...row,
-            completed: !!row.completed
-        })));
-    });
+app.get('/todos', async (req, res) => {
+    try {
+        const todos = await Todo.findAll();
+        res.json(todos);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Criar uma nova tarefa
-app.post('/todos', (req, res) => {
+app.post('/todos', async (req, res) => {
     const { title, description } = req.body;
     if (!title) {
         return res.status(400).json({ error: 'O campo "title" é obrigatório.' });
     }
 
-    const newTodo = {
-        id: uuidv4(),
-        title,
-        description: description || '',
-        completed: 0
-    };
-
-    db.run(
-        'INSERT INTO todos (id, title, description, completed) VALUES (?, ?, ?, ?)',
-        [newTodo.id, newTodo.title, newTodo.description, newTodo.completed],
-        function (err) {
-            if (err) {
-                return res.status(500).json({ error: err.message });
-            }
-            res.status(201).json(newTodo);
-        }
-    );
+    try {
+        const newTodo = await Todo.create({ title, description });
+        res.status(201).json(newTodo);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Atualizar uma tarefa por ID
-app.put('/todos/:id', (req, res) => {
+app.put('/todos/:id', async (req, res) => {
     const { id } = req.params;
     const { title, description, completed } = req.body;
 
-    db.get('SELECT * FROM todos WHERE id = ?', [id], (err, row) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        if (!row) {
+    try {
+        const todo = await Todo.findByPk(id);
+        if (!todo) {
             return res.status(404).json({ error: 'Tarefa não encontrada.' });
         }
 
-        const updatedTodo = {
-            ...row,
-            title: title !== undefined ? title : row.title,
-            description: description !== undefined ? description : row.description,
-            completed: completed !== undefined ? (completed ? 1 : 0) : row.completed
-        };
+        todo.title = title !== undefined ? title : todo.title;
+        todo.description = description !== undefined ? description : todo.description;
+        todo.completed = completed !== undefined ? completed : todo.completed;
+        await todo.save();
 
-        db.run(
-            'UPDATE todos SET title = ?, description = ?, completed = ? WHERE id = ?',
-            [updatedTodo.title, updatedTodo.description, updatedTodo.completed, id],
-            function (err) {
-                if (err) {
-                    return res.status(500).json({ error: err.message });
-                }
-                res.json({ ...updatedTodo, completed: !!updatedTodo.completed });
-            }
-        );
-    });
+        res.json(todo);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Deletar uma tarefa por ID
-app.delete('/todos/:id', (req, res) => {
+app.delete('/todos/:id', async (req, res) => {
     const { id } = req.params;
 
-    db.run('DELETE FROM todos WHERE id = ?', [id], function (err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        if (this.changes === 0) {
+    try {
+        const todo = await Todo.findByPk(id);
+        if (!todo) {
             return res.status(404).json({ error: 'Tarefa não encontrada.' });
         }
+
+        await todo.destroy();
         res.status(204).send();
-    });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Inicialização do servidor
