@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ToDo List</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            padding: 20px;
+        }
+        .todo {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #fff;
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        .todo.completed {
+            text-decoration: line-through;
+            color: #888;
+        }
+        button {
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div x-data="todoApp()" class="container">
+        <h1>ToDo List</h1>
+
+        <form @submit.prevent="addTodo">
+            <input type="text" x-model="newTodo" placeholder="Nova tarefa" required>
+            <button type="submit">Adicionar</button>
+        </form>
+
+        <div>
+            <template x-for="todo in todos" :key="todo.id">
+                <div :class="{'todo': true, 'completed': todo.completed}">
+                    <span x-text="todo.title"></span>
+                    <div>
+                        <button @click="toggleComplete(todo.id)">Toggle</button>
+                        <button @click="deleteTodo(todo.id)" style="color: red;">Excluir</button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <script>
+        function todoApp() {
+            return {
+                todos: [],
+                newTodo: '',
+
+                async fetchTodos() {
+                    try {
+                        const response = await fetch('http://localhost:3000/todos');
+                        this.todos = await response.json();
+                    } catch (error) {
+                        console.error('Erro ao buscar tarefas:', error);
+                    }
+                },
+
+                async addTodo() {
+                    try {
+                        const response = await fetch('http://localhost:3000/todos', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ title: this.newTodo })
+                        });
+
+                        if (response.ok) {
+                            const newTodo = await response.json();
+                            this.todos.push(newTodo);
+                            this.newTodo = '';
+                        }
+                    } catch (error) {
+                        console.error('Erro ao adicionar tarefa:', error);
+                    }
+                },
+
+                async toggleComplete(id) {
+                    try {
+                        const todo = this.todos.find(todo => todo.id === id);
+                        const response = await fetch(`http://localhost:3000/todos/${id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ completed: !todo.completed })
+                        });
+
+                        if (response.ok) {
+                            todo.completed = !todo.completed;
+                        }
+                    } catch (error) {
+                        console.error('Erro ao atualizar tarefa:', error);
+                    }
+                },
+
+                async deleteTodo(id) {
+                    try {
+                        const response = await fetch(`http://localhost:3000/todos/${id}`, {
+                            method: 'DELETE'
+                        });
+
+                        if (response.ok) {
+                            this.todos = this.todos.filter(todo => todo.id !== id);
+                        }
+                    } catch (error) {
+                        console.error('Erro ao excluir tarefa:', error);
+                    }
+                },
+
+                init() {
+                    this.fetchTodos();
+                }
+            };
+        }
+    </script>
+</body>
+</html>
