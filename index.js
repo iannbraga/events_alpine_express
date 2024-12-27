@@ -2,6 +2,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
+const cors = require('cors');
 
 // Inicialização do aplicativo
 const app = express();
@@ -9,6 +10,7 @@ const port = 3000;
 
 // Middleware
 app.use(bodyParser.json());
+app.use(cors());
 
 // Dados em memória (substitua por um banco de dados em produção)
 let todos = [];
