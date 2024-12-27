@@ -13,17 +13,22 @@
         }
         .todo {
             display: flex;
+            flex-direction: column;
             justify-content: space-between;
-            align-items: center;
             padding: 10px;
             background: #fff;
             border: 1px solid #ddd;
             margin-bottom: 10px;
             border-radius: 5px;
         }
-        .todo.completed {
+        .todo.completed .title {
             text-decoration: line-through;
             color: #888;
+        }
+        .actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
         }
         button {
             cursor: pointer;
@@ -35,15 +40,19 @@
         <h1>ToDo List</h1>
 
         <form @submit.prevent="addTodo">
-            <input type="text" x-model="newTodo" placeholder="Nova tarefa" required>
+            <input type="text" x-model="newTodo.title" placeholder="Título da tarefa" required>
+            <input type="text" x-model="newTodo.description" placeholder="Descrição da tarefa">
             <button type="submit">Adicionar</button>
         </form>
 
         <div>
             <template x-for="todo in todos" :key="todo.id">
                 <div :class="{'todo': true, 'completed': todo.completed}">
-                    <span x-text="todo.title"></span>
                     <div>
+                        <span class="title" x-text="todo.title"></span>
+                        <p x-text="todo.description"></p>
+                    </div>
+                    <div class="actions">
                         <button @click="toggleComplete(todo.id)">Toggle</button>
                         <button @click="deleteTodo(todo.id)" style="color: red;">Excluir</button>
                     </div>
@@ -56,7 +65,10 @@
         function todoApp() {
             return {
                 todos: [],
-                newTodo: '',
+                newTodo: {
+                    title: '',
+                    description: ''
+                },
 
                 async fetchTodos() {
                     try {
@@ -72,13 +84,14 @@
                         const response = await fetch('http://localhost:3000/todos', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ title: this.newTodo })
+                            body: JSON.stringify(this.newTodo)
                         });
 
                         if (response.ok) {
                             const newTodo = await response.json();
                             this.todos.push(newTodo);
-                            this.newTodo = '';
+                            this.newTodo.title = '';
+                            this.newTodo.description = '';
                         }
                     } catch (error) {
                         console.error('Erro ao adicionar tarefa:', error);
