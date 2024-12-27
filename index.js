@@ -15,27 +15,31 @@ app.use(cors());
 // Configuração do Sequelize
 const sequelize = new Sequelize({
     dialect: 'sqlite',
-    storage: 'todos.db'
+    storage: 'events.db'
 });
 
-// Definição do modelo ToDo
-const Todo = sequelize.define('Todo', {
+// Definição do modelo Event
+const Event = sequelize.define('Event', {
     id: {
         type: DataTypes.UUID,
         defaultValue: Sequelize.UUIDV4,
         primaryKey: true
     },
-    title: {
+    name: {
         type: DataTypes.STRING,
         allowNull: false
     },
-    description: {
+    date: {
+        type: DataTypes.DATE,
+        allowNull: false
+    },
+    location: {
         type: DataTypes.STRING,
         defaultValue: ''
     },
-    completed: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: false
+    description: {
+        type: DataTypes.TEXT,
+        defaultValue: ''
     }
 });
 
@@ -44,64 +48,65 @@ sequelize.sync();
 
 // Rotas
 
-// Obter todas as tarefas
-app.get('/todos', async (req, res) => {
+// Obter todos os eventos
+app.get('/events', async (req, res) => {
     try {
-        const todos = await Todo.findAll();
-        res.json(todos);
+        const events = await Event.findAll();
+        res.json(events);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// Criar uma nova tarefa
-app.post('/todos', async (req, res) => {
-    const { title, description } = req.body;
-    if (!title) {
-        return res.status(400).json({ error: 'O campo "title" é obrigatório.' });
+// Criar um novo evento
+app.post('/events', async (req, res) => {
+    const { name, date, location, description } = req.body;
+    if (!name || !date) {
+        return res.status(400).json({ error: 'Os campos "name" e "date" são obrigatórios.' });
     }
 
     try {
-        const newTodo = await Todo.create({ title, description });
-        res.status(201).json(newTodo);
+        const newEvent = await Event.create({ name, date, location, description });
+        res.status(201).json(newEvent);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// Atualizar uma tarefa por ID
-app.put('/todos/:id', async (req, res) => {
+// Atualizar um evento por ID
+app.put('/events/:id', async (req, res) => {
     const { id } = req.params;
-    const { title, description, completed } = req.body;
+    const { name, date, location, description } = req.body;
 
     try {
-        const todo = await Todo.findByPk(id);
-        if (!todo) {
-            return res.status(404).json({ error: 'Tarefa não encontrada.' });
+        const event = await Event.findByPk(id);
+        if (!event) {
+            return res.status(404).json({ error: 'Evento não encontrado.' });
         }
 
-        todo.title = title !== undefined ? title : todo.title;
-        todo.description = description !== undefined ? description : todo.description;
-        todo.completed = completed !== undefined ? completed : todo.completed;
-        await todo.save();
+        event.name = name !== undefined ? name : event.name;
+        event.date = date !== undefined ? date : event.date;
+        event.location = location !== undefined ? location : event.location;
+        event.description = description !== undefined ? description : event.description;
+        await event.save();
 
-        res.json(todo);
+        res.json(event);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// Deletar uma tarefa por ID
-app.delete('/todos/:id', async (req, res) => {
+// Deletar um evento por ID
+app.delete('/events/:id', async (req, res) => {
     const { id } = req.params;
 
     try {
-        const todo = await Todo.findByPk(id);
-        if (!todo) {
-            return res.status(404).json({ error: 'Tarefa não encontrada.' });
+        const event = await Event.findByPk(id);
+        if (!event) {
+            return res.status(404).json({ error: 'Evento não encontrado.' });
         }
 
-        await todo.destroy();
+        await event.destroy();
         res.status(204).send();
     } catch (error) {
         res.status(500).json({ error: error.message });
