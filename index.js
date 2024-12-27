@@ -3,6 +3,8 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
 
 // Inicialização do aplicativo
 const app = express();
@@ -12,14 +14,35 @@ const port = 3000;
 app.use(bodyParser.json());
 app.use(cors());
 
-// Dados em memória (substitua por um banco de dados em produção)
-let todos = [];
+// Inicialização do banco de dados
+const dbPath = path.resolve(__dirname, 'todos.db');
+const db = new sqlite3.Database(dbPath);
+
+// Criação da tabela de tarefas
+db.serialize(() => {
+    db.run(`
+        CREATE TABLE IF NOT EXISTS todos (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            description TEXT,
+            completed INTEGER DEFAULT 0
+        )
+    `);
+});
 
 // Rotas
 
 // Obter todas as tarefas
 app.get('/todos', (req, res) => {
-    res.json(todos);
+    db.all('SELECT * FROM todos', [], (err, rows) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.json(rows.map(row => ({
+            ...row,
+            completed: !!row.completed
+        })));
+    });
 });
 
 // Criar uma nova tarefa
@@ -33,11 +56,19 @@ app.post('/todos', (req, res) => {
         id: uuidv4(),
         title,
         description: description || '',
-        completed: false
+        completed: 0
     };
 
-    todos.push(newTodo);
-    res.status(201).json(newTodo);
+    db.run(
+        'INSERT INTO todos (id, title, description, completed) VALUES (?, ?, ?, ?)',
+        [newTodo.id, newTodo.title, newTodo.description, newTodo.completed],
+        function (err) {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+            res.status(201).json(newTodo);
+        }
+    );
 });
 
 // Atualizar uma tarefa por ID
@@ -45,33 +76,47 @@ app.put('/todos/:id', (req, res) => {
     const { id } = req.params;
     const { title, description, completed } = req.body;
 
-    const todoIndex = todos.findIndex(todo => todo.id === id);
-    if (todoIndex === -1) {
-        return res.status(404).json({ error: 'Tarefa não encontrada.' });
-    }
+    db.get('SELECT * FROM todos WHERE id = ?', [id], (err, row) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (!row) {
+            return res.status(404).json({ error: 'Tarefa não encontrada.' });
+        }
 
-    const updatedTodo = {
-        ...todos[todoIndex],
-        title: title !== undefined ? title : todos[todoIndex].title,
-        description: description !== undefined ? description : todos[todoIndex].description,
-        completed: completed !== undefined ? completed : todos[todoIndex].completed
-    };
+        const updatedTodo = {
+            ...row,
+            title: title !== undefined ? title : row.title,
+            description: description !== undefined ? description : row.description,
+            completed: completed !== undefined ? (completed ? 1 : 0) : row.completed
+        };
 
-    todos[todoIndex] = updatedTodo;
-    res.json(updatedTodo);
+        db.run(
+            'UPDATE todos SET title = ?, description = ?, completed = ? WHERE id = ?',
+            [updatedTodo.title, updatedTodo.description, updatedTodo.completed, id],
+            function (err) {
+                if (err) {
+                    return res.status(500).json({ error: err.message });
+                }
+                res.json({ ...updatedTodo, completed: !!updatedTodo.completed });
+            }
+        );
+    });
 });
 
 // Deletar uma tarefa por ID
 app.delete('/todos/:id', (req, res) => {
     const { id } = req.params;
 
-    const todoIndex = todos.findIndex(todo => todo.id === id);
-    if (todoIndex === -1) {
-        return res.status(404).json({ error: 'Tarefa não encontrada.' });
-    }
-
-    todos.splice(todoIndex, 1);
-    res.status(204).send();
+    db.run('DELETE FROM todos WHERE id = ?', [id], function (err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'Tarefa não encontrada.' });
+        }
+        res.status(204).send();
+    });
 });
 
 // Inicialização do servidor
